@@ -112,7 +112,7 @@ def search(query: str, source: str | None = None, top_k: int = 5, session_id: st
     conditions = []
     if source:
         conditions.append(FieldCondition(key="source", match=MatchValue(value=source)))
-    if session_id:
+    if session_id and source != "sample_textbook.pdf":
         conditions.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
 
     query_filter = Filter(must=conditions) if conditions else None
@@ -180,7 +180,7 @@ def get_max_page(source: str) -> int:
 
 def list_sources(session_id: str | None = None) -> list[str]:
     """Return distinct textbook sources currently stored (for UI dropdown/history).
-    When session_id is provided, only return sources belonging to that session."""
+    When session_id is provided, return sources belonging to that session or shared sample_textbook.pdf."""
     def _execute():
         client = get_client()
         if not client.collection_exists(settings.QDRANT_COLLECTION):
@@ -189,7 +189,10 @@ def list_sources(session_id: str | None = None) -> list[str]:
         scroll_filter = None
         if session_id:
             scroll_filter = Filter(
-                must=[FieldCondition(key="session_id", match=MatchValue(value=session_id))]
+                should=[
+                    FieldCondition(key="session_id", match=MatchValue(value=session_id)),
+                    FieldCondition(key="source", match=MatchValue(value="sample_textbook.pdf")),
+                ]
             )
 
         all_points, _ = client.scroll(
@@ -214,7 +217,7 @@ def delete_source(source: str, session_id: str | None = None):
         client = get_client()
         if client.collection_exists(settings.QDRANT_COLLECTION):
             conditions = [FieldCondition(key="source", match=MatchValue(value=source))]
-            if session_id:
+            if session_id and source != "sample_textbook.pdf":
                 conditions.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
             client.delete(
                 collection_name=settings.QDRANT_COLLECTION,
@@ -236,7 +239,7 @@ def search_by_page_range(source: str, start_page: int, end_page: int, limit: int
         FieldCondition(key="source", match=MatchValue(value=source)),
         FieldCondition(key="page", range=Range(gte=start_page, lte=end_page)),
     ]
-    if session_id:
+    if session_id and source != "sample_textbook.pdf":
         conditions.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
 
     query_filter = Filter(must=conditions)

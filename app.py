@@ -76,8 +76,15 @@ if "quiz_history" not in st.session_state:
     st.session_state.quiz_history = []
 if "is_processing" not in st.session_state:
     st.session_state.is_processing = False
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid.uuid4())
+if "ingested_sources" not in st.session_state:
+    st.session_state.ingested_sources = set()
+
+if "session_id" in st.query_params and st.query_params["session_id"]:
+    st.session_state.session_id = st.query_params["session_id"]
+elif "session_id" not in st.session_state:
+    new_id = str(uuid.uuid4())
+    st.session_state.session_id = new_id
+    st.query_params["session_id"] = new_id
 
 # ---- Sidebar :
 with st.sidebar:
@@ -92,7 +99,7 @@ with st.sidebar:
     uploaded = st.file_uploader("Upload a PDF", type=["pdf"], label_visibility="collapsed", key="uploader")
 
     if uploaded is not None:
-        already_ingested = uploaded.name in list_sources(st.session_state.session_id)
+        already_ingested = (uploaded.name in st.session_state.ingested_sources) or (uploaded.name in list_sources(st.session_state.session_id))
         if not already_ingested:
             progress = st.progress(0, text="Extracting text...")
             large_doc_notice = st.empty()
@@ -129,6 +136,7 @@ with st.sidebar:
                 progress.progress(95, text="Storing vectors in Qdrant...")
                 progress.progress(100, text="Document ready!")
 
+                st.session_state.ingested_sources.add(uploaded.name)
                 st.session_state.total_pages[uploaded.name] = len(pages)
                 st.session_state.current_source = uploaded.name
                 os.remove(temp_path)
@@ -147,9 +155,13 @@ with st.sidebar:
             st.rerun()
         else:
             st.session_state.current_source = uploaded.name
+            st.session_state.ingested_sources.add(uploaded.name)
 
     sample_path = "assets/sample_textbook.pdf"
-    if "sample_textbook.pdf" not in list_sources(st.session_state.session_id) and os.path.exists(sample_path):
+    qdrant_sources = list_sources(st.session_state.session_id)
+    all_sources = sorted(list(set(qdrant_sources).union(st.session_state.ingested_sources)))
+
+    if "sample_textbook.pdf" not in all_sources and os.path.exists(sample_path):
         if st.button("✨ Try a sample textbook", use_container_width=True):
             progress = st.progress(0, text="Extracting text...")
             try:
@@ -168,6 +180,7 @@ with st.sidebar:
                 upsert_chunks(chunks, source="sample_textbook.pdf", on_progress=_on_embed_progress, session_id=st.session_state.session_id)
                 progress.progress(95, text="Storing vectors in Qdrant...")
                 progress.progress(100, text="Document ready!")
+                st.session_state.ingested_sources.add("sample_textbook.pdf")
                 st.session_state.total_pages["sample_textbook.pdf"] = len(pages)
                 st.session_state.current_source = "sample_textbook.pdf"
                 list_sources.clear()
@@ -180,7 +193,7 @@ with st.sidebar:
                 st.stop()
             st.rerun()
 
-    sources = list_sources(st.session_state.session_id)
+    sources = all_sources
     if sources:
         for f in sources:
             ui.render_file_pill(f, active=(f == st.session_state.current_source))
@@ -197,6 +210,8 @@ with st.sidebar:
 
         if st.button("🗑 Remove this textbook", use_container_width=True):
             delete_source(st.session_state.current_source, session_id=st.session_state.session_id)
+            if st.session_state.current_source in st.session_state.ingested_sources:
+                st.session_state.ingested_sources.remove(st.session_state.current_source)
             st.session_state.current_source = None
             list_sources.clear()
             st.rerun()
