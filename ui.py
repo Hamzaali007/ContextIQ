@@ -701,12 +701,12 @@ def render_quick_chips() -> str | None:
 
 
 def render_user_bubble(text: str):
-    with st.chat_message("user", avatar="icons\user.png"):
+    with st.chat_message("user", avatar="icons/user.png"):
         st.markdown(f'<div class="bubble-user">{text}</div>', unsafe_allow_html=True)
 
 
 def render_assistant_bubble(text: str, citation: str | None = None):
-    with st.chat_message("assistant", avatar="icons\AI.png"):
+    with st.chat_message("assistant", avatar="icons/AI.png"):
         html = f'<div class="bubble-assistant">{text}'
         if citation:
             html += f'<span class="cite">{citation}</span>'
@@ -715,7 +715,7 @@ def render_assistant_bubble(text: str, citation: str | None = None):
 
 
 def render_thinking_start():
-    with st.chat_message("assistant", avatar="icons\AI.png"):
+    with st.chat_message("assistant", avatar="icons/AI.png"):
         placeholder = st.empty()
         placeholder.markdown(
             '<div class="bubble-assistant"><span class="thinking">'
