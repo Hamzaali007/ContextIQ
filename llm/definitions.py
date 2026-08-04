@@ -62,9 +62,9 @@ def _normalize_definitions(data: dict) -> dict:
     return {"definitions": [d for d in normalized if d["term"] and d["definition"]]}
 
 
-def extract_definitions_by_range(source: str, start_page: int, end_page: int) -> dict:
+def extract_definitions_by_range(source: str, start_page: int, end_page: int, session_id: str | None = None) -> dict:
     """Extract key terms/definitions from a specific page range"""
-    chunks = search_by_page_range(source=source, start_page=start_page, end_page=end_page)
+    chunks = search_by_page_range(source=source, start_page=start_page, end_page=end_page, session_id=session_id)
 
     if not chunks:
         return {"error": f"No content found in pages {start_page} - {end_page} for this document."}
@@ -72,9 +72,9 @@ def extract_definitions_by_range(source: str, start_page: int, end_page: int) ->
     return _run_extraction(chunks)
 
 
-def extract_definitions_by_topic(source: str, topic: str, top_k: int = 5, min_score: float = 0.4) -> dict:
+def extract_definitions_by_topic(source: str, topic: str, top_k: int = 5, min_score: float = 0.4, session_id: str | None = None) -> dict:
     """Extract key terms/definitions related to a topic via semantic search"""
-    chunks = search(query=topic, source=source, top_k=top_k)
+    chunks = search(query=topic, source=source, top_k=top_k, session_id=session_id)
 
     relevant_chunks = [c for c in chunks if c["score"] >= min_score]
 

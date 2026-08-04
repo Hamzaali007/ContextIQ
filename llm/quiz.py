@@ -101,8 +101,9 @@ def generate_quiz(
     num_questions: int = 8,
     question_types: Optional[list[str]] = None,
     difficulty: Optional[str] = None,
+    session_id: str | None = None,
 ) -> dict:
-    chunks = search_by_page_range(source=source, start_page=start_page, end_page=end_page)
+    chunks = search_by_page_range(source=source, start_page=start_page, end_page=end_page, session_id=session_id)
     if not chunks:
         return {"error": f"No content found in pages {start_page}-{end_page} for this document."}
 

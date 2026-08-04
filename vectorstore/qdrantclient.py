@@ -60,16 +60,23 @@ def create_collection_if_not_exists():
                 field_name="source",
                 field_schema=PayloadSchemaType.KEYWORD,
             )
+            # Create an index on "session_id" for per-user isolation
+            client.create_payload_index(
+                collection_name=settings.QDRANT_COLLECTION,
+                field_name="session_id",
+                field_schema=PayloadSchemaType.KEYWORD,
+            )
 
     _retry_on_network_error(_execute)
 
 
-def upsert_chunks(chunks: list[dict], source: str, on_progress=None) -> int:
+def upsert_chunks(chunks: list[dict], source: str, on_progress=None, session_id: str | None = None) -> int:
     """
     chunks: list of {"page": int, "chunk_id": int, "text": str}
     source: filename/identifier of the PDF, stored in payload for scoped retrieval
     on_progress: optional callable(done: int, total: int, status: str | None),
     forwarded to embed_texts() so a caller can drive a progress bar.
+    session_id: browser session UUID — used to isolate each user's uploads.
     """
     create_collection_if_not_exists()
 
@@ -85,6 +92,7 @@ def upsert_chunks(chunks: list[dict], source: str, on_progress=None) -> int:
                 "page": chunks[i]["page"],
                 "chunk_id": chunks[i]["chunk_id"],
                 "source": source,
+                "session_id": session_id or "",
             },
         )
         for i in range(len(chunks))
@@ -98,14 +106,16 @@ def upsert_chunks(chunks: list[dict], source: str, on_progress=None) -> int:
     return len(points)
 
 
-def search(query: str, source: str | None = None, top_k: int = 5):
+def search(query: str, source: str | None = None, top_k: int = 5, session_id: str | None = None):
     query_vector = embed_query(query)
 
-    query_filter = None
+    conditions = []
     if source:
-        query_filter = Filter(
-            must=[FieldCondition(key="source", match=MatchValue(value=source))]
-        )
+        conditions.append(FieldCondition(key="source", match=MatchValue(value=source)))
+    if session_id:
+        conditions.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
+
+    query_filter = Filter(must=conditions) if conditions else None
 
     def _execute():
         client = get_client()
@@ -168,14 +178,23 @@ def get_max_page(source: str) -> int:
         return 0
 
 
-def list_sources() -> list[str]:
-    """Return distinct textbook sources currently stored (for UI dropdown/history)."""
+def list_sources(session_id: str | None = None) -> list[str]:
+    """Return distinct textbook sources currently stored (for UI dropdown/history).
+    When session_id is provided, only return sources belonging to that session."""
     def _execute():
         client = get_client()
         if not client.collection_exists(settings.QDRANT_COLLECTION):
             return []
+
+        scroll_filter = None
+        if session_id:
+            scroll_filter = Filter(
+                must=[FieldCondition(key="session_id", match=MatchValue(value=session_id))]
+            )
+
         all_points, _ = client.scroll(
             collection_name=settings.QDRANT_COLLECTION,
+            scroll_filter=scroll_filter,
             limit=10000,
             with_payload=["source"],
         )
@@ -188,16 +207,18 @@ def list_sources() -> list[str]:
         return []
 
 
-def delete_source(source: str):
-    """Delete all chunks belonging to one textbook (not the whole collection)."""
+def delete_source(source: str, session_id: str | None = None):
+    """Delete all chunks belonging to one textbook (not the whole collection).
+    When session_id is provided, only deletes chunks matching both source AND session."""
     def _execute():
         client = get_client()
         if client.collection_exists(settings.QDRANT_COLLECTION):
+            conditions = [FieldCondition(key="source", match=MatchValue(value=source))]
+            if session_id:
+                conditions.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
             client.delete(
                 collection_name=settings.QDRANT_COLLECTION,
-                points_selector=Filter(
-                    must=[FieldCondition(key="source", match=MatchValue(value=source))]
-                ),
+                points_selector=Filter(must=conditions),
             )
 
     try:
@@ -206,17 +227,19 @@ def delete_source(source: str):
         print(f"Warning: Failed to delete source from Qdrant: {e}")
 
 
-def search_by_page_range(source: str, start_page: int, end_page: int, limit: int = 1000):
+def search_by_page_range(source: str, start_page: int, end_page: int, limit: int = 1000, session_id: str | None = None):
     """
     Retrieve all chunks for 'source' within [start_page, end_page] inclusive.
     Used for chapter/range-based quiz generation — structural filtering.
     """
-    query_filter = Filter(
-        must=[
-            FieldCondition(key="source", match=MatchValue(value=source)),
-            FieldCondition(key="page", range=Range(gte=start_page, lte=end_page)),
-        ]
-    )
+    conditions = [
+        FieldCondition(key="source", match=MatchValue(value=source)),
+        FieldCondition(key="page", range=Range(gte=start_page, lte=end_page)),
+    ]
+    if session_id:
+        conditions.append(FieldCondition(key="session_id", match=MatchValue(value=session_id)))
+
+    query_filter = Filter(must=conditions)
 
     def _execute():
         client = get_client()

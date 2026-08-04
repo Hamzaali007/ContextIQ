@@ -62,16 +62,16 @@ def _normalize_flashcards(data:dict)-> dict:
     return {"flashcards": [c for c in normalized if c["front"] and c["back"]]}
 
 
-def generate_flashcards_by_range(source:str,start_page:int,end_page:int, num_cards:int | None=None)->dict :
-    chunks = search_by_page_range(source=source,start_page=start_page,end_page=end_page)
+def generate_flashcards_by_range(source:str,start_page:int,end_page:int, num_cards:int | None=None,session_id:str | None=None)->dict :
+    chunks = search_by_page_range(source=source,start_page=start_page,end_page=end_page,session_id=session_id)
     if not chunks:
         return {"error":f"No content found in pages {start_page} - {end_page} for this document."}
 
     return _run_generation(chunks,num_cards=num_cards)
 
 
-def generate_flashcards_by_topic(source:str,topic:str,top_k:int=5,min_score:float=0.4,num_cards:int | None=None) -> dict:
-    chunks = search(query=topic,source=source,top_k=top_k)
+def generate_flashcards_by_topic(source:str,topic:str,top_k:int=5,min_score:float=0.4,num_cards:int | None=None,session_id:str | None=None) -> dict:
+    chunks = search(query=topic,source=source,top_k=top_k,session_id=session_id)
     relevant_chunks = [c for c in chunks if c["score"] >= min_score]
 
     if not relevant_chunks:

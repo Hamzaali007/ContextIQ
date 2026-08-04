@@ -72,14 +72,14 @@ def check_output(bot_message: str) -> dict:
     }
 
 
-def guarded_answer(question:str,source:str,chat_history:list[dict] | None =None)-> dict:
+def guarded_answer(question:str,source:str,chat_history:list[dict] | None =None,session_id:str | None=None)-> dict:
     """Non-streaming version-kept for quiz/definitions/anywhere yuo need the full text upfront"""
     from llm.qa import answer_question
     input_check = check_input(question)
     if not input_check["allowed"]:
         return {"answer": input_check["refusal_message"],"sources":[]}
 
-    result = answer_question(question=question,source=source,chat_history=chat_history)
+    result = answer_question(question=question,source=source,chat_history=chat_history,session_id=session_id)
     output_check = check_output(result["answer"])
     if not output_check["allowed"]:
         return {"answer":output_check["message"],"sources":[]}
@@ -88,7 +88,7 @@ def guarded_answer(question:str,source:str,chat_history:list[dict] | None =None)
 
 
 
-def guarded_answer_stream(question:str,source:str,chat_history:list[dict] | None=None):
+def guarded_answer_stream(question:str,source:str,chat_history:list[dict] | None=None,session_id:str | None=None):
     """
     Streaming version. Input is checked before any generation starts.
     The output-check runs after the full answer has streamed (can't check text that doesn;t exist yet) 
@@ -103,7 +103,7 @@ def guarded_answer_stream(question:str,source:str,chat_history:list[dict] | None
 
         return [], _refusal(), None
 
-    sources, generator = answer_question_stream(question,source,chat_history=chat_history)
+    sources, generator = answer_question_stream(question,source,chat_history=chat_history,session_id=session_id)
     full_text = {"value":""}
 
     def _wrapped():
@@ -124,8 +124,9 @@ def guarded_quiz(
     start_page: int,
     end_page: int,
     num_questions: int = 8,
-    question_types: Optional[list[str]] = None,   # NEW
-    difficulty: Optional[str] = None,              # NEW
+    question_types: Optional[list[str]] = None,
+    difficulty: Optional[str] = None,
+    session_id: str | None = None,
 ) -> dict:
     from llm.quiz import generate_quiz
 
@@ -138,44 +139,42 @@ def guarded_quiz(
         start_page=start_page,
         end_page=end_page,
         num_questions=num_questions,
-        question_types=question_types,   # NEW: pass along
-        difficulty=difficulty,           # NEW: pass along
+        question_types=question_types,
+        difficulty=difficulty,
+        session_id=session_id,
     )
 
-def guarded_definitions_by_range(source:str,start_page:int,end_page:int) -> dict:
+def guarded_definitions_by_range(source:str,start_page:int,end_page:int,session_id:str | None=None) -> dict:
     from llm.definitions import extract_definitions_by_range
     input_check = check_input(f"Extract definitions from pages {start_page}- {end_page}")
     if not input_check["allowed"]:
         return {"error":input_check["refusal_message"]}
 
-    return extract_definitions_by_range(source=source,start_page=start_page,end_page=end_page)
+    return extract_definitions_by_range(source=source,start_page=start_page,end_page=end_page,session_id=session_id)
 
 
-def guarded_definitions_by_topic(source:str,topic:str)->dict:
+def guarded_definitions_by_topic(source:str,topic:str,session_id:str | None=None)->dict:
     from llm.definitions import extract_definitions_by_topic
 
     input_check = check_input(topic)
     if not input_check["allowed"]:
         return {"error":input_check["refusal_message"]}
 
-    return extract_definitions_by_topic(source=source,topic=topic)
+    return extract_definitions_by_topic(source=source,topic=topic,session_id=session_id)
 
 
 
-def guarded_flashcards_by_range(source:str,start_page:int,end_page:int,num_cards:int | None=None) -> dict:
+def guarded_flashcards_by_range(source:str,start_page:int,end_page:int,num_cards:int | None=None,session_id:str | None=None) -> dict:
     from llm.Flashcards import generate_flashcards_by_range
     input_check = check_input(f"Generate flashcards for pages {start_page}-{end_page}")
     if not input_check["allowed"]:
         return {"error":input_check["refusal_message"]}
-    return generate_flashcards_by_range(source=source,start_page=start_page,end_page=end_page,num_cards=num_cards)
+    return generate_flashcards_by_range(source=source,start_page=start_page,end_page=end_page,num_cards=num_cards,session_id=session_id)
 
 
-def guarded_flashcards_by_topic(source:str,topic:str,num_cards:int | None=None)-> dict:
+def guarded_flashcards_by_topic(source:str,topic:str,num_cards:int | None=None,session_id:str | None=None)->dict:
     from llm.Flashcards import generate_flashcards_by_topic
     input_check = check_input(topic)
     if not input_check["allowed"]:
         return {"error":input_check["refusal_message"]}
-    return generate_flashcards_by_topic(source=source,topic=topic,num_cards=num_cards)
-
-
-
+    return generate_flashcards_by_topic(source=source,topic=topic,num_cards=num_cards,session_id=session_id)

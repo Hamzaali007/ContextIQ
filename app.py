@@ -1,4 +1,5 @@
 import os
+import uuid
 import tempfile
 import streamlit as st
 from vectorstore import search_by_page_range
@@ -22,22 +23,24 @@ st.set_page_config(page_title="ContextIQ", page_icon="icons\\AI.png", layout="wi
 
 
 @st.cache_data(ttl=30, show_spinner=False)
-def list_sources():
+def list_sources(session_id: str):
     """
     Cached wrapper around the real Qdrant list_sources() call.
     Without this, every single button click (any rerun) triggers a fresh
     Qdrant network round-trip — this was the main cause of multi-second
     delays on every interaction. Call list_sources.clear() right after any
     upload/delete so the change shows up immediately instead of waiting for TTL.
+    The session_id parameter scopes the cache and the Qdrant query to this
+    browser session so each user only sees their own uploads.
     """
-    return _list_sources_raw()
+    return _list_sources_raw(session_id=session_id)
 
 @st.cache_data(ttl=300, show_spinner=False)
-def get_page_count(source: str) -> int:
+def get_page_count(source: str, session_id: str) -> int:
     """Determine a book's real page count from what's stored in Qdrant —
     used when a book was selected from the sidebar rather than just
     uploaded, since total_pages session state only gets set during upload."""
-    chunks = search_by_page_range(source=source, start_page=1, end_page=100000)
+    chunks = search_by_page_range(source=source, start_page=1, end_page=100000, session_id=session_id)
     if not chunks:
         return 50
     return max(c["page"] for c in chunks if c.get("page"))
@@ -67,6 +70,8 @@ if "quiz_history" not in st.session_state:
     st.session_state.quiz_history = []
 if "is_processing" not in st.session_state:
     st.session_state.is_processing = False
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
 
 # ---- Sidebar :
 with st.sidebar:
@@ -81,7 +86,7 @@ with st.sidebar:
     uploaded = st.file_uploader("Upload a PDF", type=["pdf"], label_visibility="collapsed", key="uploader")
 
     if uploaded is not None:
-        already_ingested = uploaded.name in list_sources()
+        already_ingested = uploaded.name in list_sources(st.session_state.session_id)
         if not already_ingested:
             progress = st.progress(0, text="Extracting text...")
             large_doc_notice = st.empty()
@@ -114,7 +119,7 @@ with st.sidebar:
                     else:
                         progress.progress(pct, text=f"Generating embeddings... ({done}/{total} chunks)")
 
-                upsert_chunks(chunks, source=uploaded.name, on_progress=_on_embed_progress)
+                upsert_chunks(chunks, source=uploaded.name, on_progress=_on_embed_progress, session_id=st.session_state.session_id)
                 progress.progress(95, text="Storing vectors in Qdrant...")
                 progress.progress(100, text="Document ready!")
 
@@ -138,7 +143,7 @@ with st.sidebar:
             st.session_state.current_source = uploaded.name
 
     sample_path = "assets/sample_textbook.pdf"
-    if "sample_textbook.pdf" not in list_sources() and os.path.exists(sample_path):
+    if "sample_textbook.pdf" not in list_sources(st.session_state.session_id) and os.path.exists(sample_path):
         if st.button("✨ Try a sample textbook", use_container_width=True):
             progress = st.progress(0, text="Extracting text...")
             try:
@@ -154,7 +159,7 @@ with st.sidebar:
                     else:
                         progress.progress(pct, text=f"Generating embeddings... ({done}/{total} chunks)")
 
-                upsert_chunks(chunks, source="sample_textbook.pdf", on_progress=_on_embed_progress)
+                upsert_chunks(chunks, source="sample_textbook.pdf", on_progress=_on_embed_progress, session_id=st.session_state.session_id)
                 progress.progress(95, text="Storing vectors in Qdrant...")
                 progress.progress(100, text="Document ready!")
                 st.session_state.total_pages["sample_textbook.pdf"] = len(pages)
@@ -169,7 +174,7 @@ with st.sidebar:
                 st.stop()
             st.rerun()
 
-    sources = list_sources()
+    sources = list_sources(st.session_state.session_id)
     if sources:
         for f in sources:
             ui.render_file_pill(f, active=(f == st.session_state.current_source))
@@ -185,7 +190,7 @@ with st.sidebar:
             st.rerun()
 
         if st.button("🗑 Remove this textbook", use_container_width=True):
-            delete_source(st.session_state.current_source)
+            delete_source(st.session_state.current_source, session_id=st.session_state.session_id)
             st.session_state.current_source = None
             list_sources.clear()
             st.rerun()
@@ -267,7 +272,7 @@ def build_chat_history() -> list[dict]:
 def handle_qa_stream(prompt: str, source: str, placeholder=None):
     try:
         chat_history = build_chat_history()
-        sources, generator, post_check = guarded_answer_stream(prompt, source, chat_history=chat_history)
+        sources, generator, post_check = guarded_answer_stream(prompt, source, chat_history=chat_history, session_id=st.session_state.session_id)
         if placeholder is None:
             full_text, placeholder = ui.render_assistant_stream(generator)
         else:
@@ -315,7 +320,7 @@ def handle_quiz(source: str, start: int, end: int, num_questions: int = 6):
     try:
         # Quiz Me mode is auto-graded, so it's restricted to multiple-choice and
         # true/false only — no short/long answer questions mixed in.But for generation of pdf test user can choose any option or all options
-        quiz_data = guarded_quiz(source, start, end, num_questions=num_questions, question_types=["multiple_choice", "true_false"])
+        quiz_data = guarded_quiz(source, start, end, num_questions=num_questions, question_types=["multiple_choice", "true_false"], session_id=st.session_state.session_id)
         if "error" in quiz_data:
             st.session_state.messages.append({"role": "assistant", "type": "text", "content": quiz_data["error"]})
             return
@@ -333,9 +338,9 @@ def handle_quiz(source: str, start: int, end: int, num_questions: int = 6):
 def handle_definitions(prompt: str, source: str, start: int | None, end: int | None, use_range: bool):
     try:
         if use_range and start and end:
-            result = guarded_definitions_by_range(source, start, end)
+            result = guarded_definitions_by_range(source, start, end, session_id=st.session_state.session_id)
         else:
-            result = guarded_definitions_by_topic(source, prompt)
+            result = guarded_definitions_by_topic(source, prompt, session_id=st.session_state.session_id)
 
         if "error" in result:
             text = result["error"]
@@ -351,9 +356,9 @@ def handle_definitions(prompt: str, source: str, start: int | None, end: int | N
 def handle_flashcards(prompt:str,source:str,start:int | None , end:int |None , use_range:bool,topic:str | None, num_cards:int |None):
     try:
         if use_range and start and end :
-            result = guarded_flashcards_by_range(source,start,end,num_cards=num_cards)
+            result = guarded_flashcards_by_range(source,start,end,num_cards=num_cards,session_id=st.session_state.session_id)
         else:
-            result = guarded_flashcards_by_topic(source, topic or prompt,num_cards=num_cards)
+            result = guarded_flashcards_by_topic(source, topic or prompt,num_cards=num_cards,session_id=st.session_state.session_id)
 
         if "error" in result:
             st.session_state.messages.append({"role":"assistant","type":"text","content":result["error"]})
@@ -387,6 +392,7 @@ def handle_pdf_test(
             num_questions=num_questions,
             question_types=question_types,
             difficulty=difficulty,
+            session_id=st.session_state.session_id,
         )
         if "error" in quiz_data:
             st.session_state.messages.append({"role": "assistant", "type": "text", "content": quiz_data["error"]})
@@ -443,7 +449,7 @@ with col5:
     if st.button("📄 Generate PDF Test", use_container_width=True,type="primary" if st.session_state.mode == "pdf_test" else "secondary"):
         st.session_state.mode = "pdf_test"
 if st.session_state.current_source not in st.session_state.total_pages:
-    st.session_state.total_pages[st.session_state.current_source] = get_page_count(st.session_state.current_source)
+    st.session_state.total_pages[st.session_state.current_source] = get_page_count(st.session_state.current_source, st.session_state.session_id)
 max_pages = st.session_state.total_pages[st.session_state.current_source]
 page_range = None
 num_questions = 8

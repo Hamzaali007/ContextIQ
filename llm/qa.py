@@ -65,8 +65,8 @@ def build_history_block(chat_history:list[dict]| None) -> str:
 
 
 
-def answer_question(question:str,source:str,top_k:int=5,chat_history:list[dict] | None =None) -> dict:
-    chunks = search(query=question,source=source,top_k=top_k)
+def answer_question(question:str,source:str,top_k:int=5,chat_history:list[dict] | None =None,session_id:str | None=None) -> dict:
+    chunks = search(query=question,source=source,top_k=top_k,session_id=session_id)
 
     if not chunks:
         return {"answer":"I couldn't find any relevant content in this document.","sources":[]}
@@ -88,14 +88,14 @@ Answer the question using only the context above"""
 
     }
 
-def answer_question_stream(question:str,source:str,top_k:int=5,chat_history:list[dict] | None =None):
+def answer_question_stream(question:str,source:str,top_k:int=5,chat_history:list[dict] | None =None,session_id:str | None=None):
     """
     Returns (sources,generator). Retrieval happens synchronously (fast);
     the generator yields the answer text chunk by chunk.
     """
 
     from llm.groq_client import generate_completion_stream
-    chunks = search(query=question,source=source,top_k=top_k)
+    chunks = search(query=question,source=source,top_k=top_k,session_id=session_id)
     sources = [{"page":c["page"],"score":c["score"],"text":c["text"]} for c in chunks]
 
     if not chunks:
