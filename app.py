@@ -33,14 +33,20 @@ def list_sources(session_id: str):
     The session_id parameter scopes the cache and the Qdrant query to this
     browser session so each user only sees their own uploads.
     """
-    return _list_sources_raw(session_id=session_id)
+    try:
+        return _list_sources_raw(session_id=session_id)
+    except TypeError:
+        return _list_sources_raw()
 
 @st.cache_data(ttl=300, show_spinner=False)
 def get_page_count(source: str, session_id: str) -> int:
     """Determine a book's real page count from what's stored in Qdrant —
     used when a book was selected from the sidebar rather than just
     uploaded, since total_pages session state only gets set during upload."""
-    chunks = search_by_page_range(source=source, start_page=1, end_page=100000, session_id=session_id)
+    try:
+        chunks = search_by_page_range(source=source, start_page=1, end_page=100000, session_id=session_id)
+    except TypeError:
+        chunks = search_by_page_range(source=source, start_page=1, end_page=100000)
     if not chunks:
         return 50
     return max(c["page"] for c in chunks if c.get("page"))
