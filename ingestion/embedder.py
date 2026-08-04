@@ -6,8 +6,8 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from config import settings
 
 # --- Configuration ---
-EMBED_BATCH_SIZE = 15
-BATCH_PAUSE_SECONDS = 0.5
+EMBED_BATCH_SIZE = 100
+BATCH_PAUSE_SECONDS = 60
 MAX_RETRIES_PER_KEY = 5
 RETRY_BACKOFF_BASE = 2
 
