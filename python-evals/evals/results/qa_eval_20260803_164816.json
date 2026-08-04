@@ -1,0 +1,130 @@
+{
+  "summary": {
+    "n_cases": 6,
+    "n_judged": 6,
+    "avg_faithfulness": 5.0,
+    "avg_relevance": 5.0,
+    "avg_correctness": 5.0,
+    "retrieval_precision_at_5": 0.8
+  },
+  "results": [
+    {
+      "question": "What is the cell membrane made of?",
+      "answer": "The cell membrane, also called the plasma membrane, is composed primarily of a phospholipid bilayer embedded with proteins, a structure described by the fluid mosaic model (Page 1).",
+      "retrieval": {
+        "hit": true,
+        "rank": 1,
+        "retrieved_pages": [
+          1,
+          1,
+          2,
+          2,
+          1
+        ]
+      },
+      "judge": {
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 5,
+        "reasoning": "The answer accurately describes the cell membrane's composition and structure, including the phospholipid bilayer, proteins, and the fluid mosaic model, directly addressing the question."
+      }
+    },
+    {
+      "question": "What dos the nucleolus produce?",
+      "answer": "The nucleolus produces ribosomes, which are later transported to the cytoplasm to carry out protein synthesis (Page 1).",
+      "retrieval": {
+        "hit": true,
+        "rank": 1,
+        "retrieved_pages": [
+          1,
+          1,
+          2,
+          2,
+          1
+        ]
+      },
+      "judge": {
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 5,
+        "reasoning": "The answer accurately states that the nucleolus produces ribosomes, which is a fundamental biological fact, and provides additional relevant context about their role in protein synthesis."
+      }
+    },
+    {
+      "question": "How many ATP does glycolysis produce net?",
+      "answer": "Glycolysis produces a net gain of 2 ATP. (Page 2)",
+      "retrieval": {
+        "hit": true,
+        "rank": 1,
+        "retrieved_pages": [
+          2,
+          2,
+          1,
+          1,
+          1
+        ]
+      },
+      "judge": {
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 5,
+        "reasoning": "The answer directly addresses the question and accurately states the expected key fact of a net gain of 2 ATP from glycolysis."
+      }
+    },
+    {
+      "question": "What is required as the final electron acceptor in the electron transport chain?",
+      "answer": "According to the context on page 2, oxygen is required as the final electron acceptor in the electron transport chain. This process is described as an aerobic process and is crucial for the production of a large majority of the cell's ATP through a process called chemiosmosis.",
+      "retrieval": {
+        "hit": true,
+        "rank": 1,
+        "retrieved_pages": [
+          2,
+          2,
+          1,
+          1,
+          1
+        ]
+      },
+      "judge": {
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 5,
+        "reasoning": "The answer accurately identifies oxygen as the final electron acceptor in the electron transport chain, aligning with expected key facts and demonstrating a clear understanding of the process."
+      }
+    },
+    {
+      "question": "What is the difference between mitosis and meiosis?",
+      "answer": "According to the context provided on Page 2, the main difference between mitosis and meiosis is the outcome of the cell division process. \n\nMitosis produces two genetically identical daughter cells, whereas meiosis produces four genetically distinct gametes with half the chromosome number of the parent cell. \n\nIn other words, mitosis results in two identical cells, while meiosis results in four unique cells with half the number of chromosomes. (Page 2)",
+      "retrieval": {
+        "hit": false,
+        "rank": null,
+        "retrieved_pages": [
+          2,
+          2,
+          1,
+          1,
+          1
+        ]
+      },
+      "judge": {
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 5,
+        "reasoning": "The answer accurately describes the difference between mitosis and meiosis, including the key facts about genetically identical and distinct cells and chromosome number."
+      }
+    },
+    {
+      "question": "What is the capital of France?",
+      "answer": "I couldn't find this in the document.",
+      "retrieval": {
+        "skipped": true
+      },
+      "judge": {
+        "faithfulness": 5,
+        "relevance": 5,
+        "correctness": 5,
+        "reasoning": "The system correctly declines to answer by stating it couldn't find the information in the document."
+      }
+    }
+  ]
+}

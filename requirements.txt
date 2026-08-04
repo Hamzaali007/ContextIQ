@@ -1,0 +1,31 @@
+# Core app
+streamlit
+python-dotenv
+
+# PDF loading
+pypdf
+
+# LangChain core + integrations
+langchain
+langchain-community
+langchain-google-genai
+langchain-groq
+
+# Google Gemini & Groq
+google-generativeai
+groq
+
+# Vector DB
+qdrant-client
+
+# Guardrails
+nemoguardrails
+
+# Utilities
+pydantic
+tiktoken
+
+langchain-huggingface
+sentence-transformers
+
+
