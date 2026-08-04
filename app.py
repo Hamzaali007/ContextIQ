@@ -78,6 +78,8 @@ if "is_processing" not in st.session_state:
     st.session_state.is_processing = False
 if "ingested_sources" not in st.session_state:
     st.session_state.ingested_sources = set()
+if "deleted_sources" not in st.session_state:
+    st.session_state.deleted_sources = set()
 
 if "session_id" in st.query_params and st.query_params["session_id"]:
     st.session_state.session_id = st.query_params["session_id"]
@@ -99,69 +101,73 @@ with st.sidebar:
     uploaded = st.file_uploader("Upload a PDF", type=["pdf"], label_visibility="collapsed", key="uploader")
 
     if uploaded is not None:
-        already_ingested = (uploaded.name in st.session_state.ingested_sources) or (uploaded.name in list_sources(st.session_state.session_id))
-        if not already_ingested:
-            progress = st.progress(0, text="Extracting text...")
-            large_doc_notice = st.empty()
-            try:
-                temp_path = os.path.join(tempfile.gettempdir(), uploaded.name)
-                with open(temp_path, "wb") as f:
-                    f.write(uploaded.getbuffer())
-
-                pages = extract_pdf(temp_path)
-                progress.progress(15, text=f"Extracted {len(pages)} pages. Splitting into chunks...")
-
-                chunks = chunk_pages(pages)
-                progress.progress(30, text=f"Created {len(chunks)} chunks.")
-
-                # LARGE_DOC_CHUNK_THRESHOLD: above this, warn the user up front
-                # so they don't think the app has frozen during embedding.
-                LARGE_DOC_CHUNK_THRESHOLD = 50
-                if len(chunks) > LARGE_DOC_CHUNK_THRESHOLD:
-                    large_doc_notice.warning(
-                        "📚 This is a large document (**%d chunks**). "
-                        "Large documents may take 1-3 minutes to process depending on the "
-                        "number of pages and chunks — feel free to keep this tab open."
-                        % len(chunks)
-                    )
-
-                def _on_embed_progress(done, total, status):
-                    pct = 30 + int((done / total) * 60) if total else 30
-                    if status:
-                        progress.progress(pct, text=status)
-                    else:
-                        progress.progress(pct, text=f"Generating embeddings... ({done}/{total} chunks)")
-
-                upsert_chunks(chunks, source=uploaded.name, on_progress=_on_embed_progress, session_id=st.session_state.session_id)
-                progress.progress(95, text="Storing vectors in Qdrant...")
-                progress.progress(100, text="Document ready!")
-
-                st.session_state.ingested_sources.add(uploaded.name)
-                st.session_state.total_pages[uploaded.name] = len(pages)
-                st.session_state.current_source = uploaded.name
-                os.remove(temp_path)
-                list_sources.clear()
-            except Exception as e:
-                progress.empty()
-                large_doc_notice.empty()
-                if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
-                    st.error(
-                        "Embedding service is busy and retries were exhausted. "
-                        "Please wait a minute and try uploading again."
-                    )
-                else:
-                    st.error(f"Couldn't process this PDF: {e}")
-                st.stop()
-            st.rerun()
+        if uploaded.name in st.session_state.deleted_sources:
+            pass  # User explicitly removed this textbook; do not re-ingest automatically
         else:
-            st.session_state.current_source = uploaded.name
-            st.session_state.ingested_sources.add(uploaded.name)
+            already_ingested = (uploaded.name in st.session_state.ingested_sources) or (uploaded.name in list_sources(st.session_state.session_id))
+            if not already_ingested:
+                progress = st.progress(0, text="Extracting text...")
+                large_doc_notice = st.empty()
+                try:
+                    temp_path = os.path.join(tempfile.gettempdir(), uploaded.name)
+                    with open(temp_path, "wb") as f:
+                        f.write(uploaded.getbuffer())
+
+                    pages = extract_pdf(temp_path)
+                    progress.progress(15, text=f"Extracted {len(pages)} pages. Splitting into chunks...")
+
+                    chunks = chunk_pages(pages)
+                    progress.progress(30, text=f"Created {len(chunks)} chunks.")
+
+                    # LARGE_DOC_CHUNK_THRESHOLD: above this, warn the user up front
+                    # so they don't think the app has frozen during embedding.
+                    LARGE_DOC_CHUNK_THRESHOLD = 50
+                    if len(chunks) > LARGE_DOC_CHUNK_THRESHOLD:
+                        large_doc_notice.warning(
+                            "📚 This is a large document (**%d chunks**). "
+                            "Large documents may take 1-3 minutes to process depending on the "
+                            "number of pages and chunks — feel free to keep this tab open."
+                            % len(chunks)
+                        )
+
+                    def _on_embed_progress(done, total, status):
+                        pct = 30 + int((done / total) * 60) if total else 30
+                        if status:
+                            progress.progress(pct, text=status)
+                        else:
+                            progress.progress(pct, text=f"Generating embeddings... ({done}/{total} chunks)")
+
+                    upsert_chunks(chunks, source=uploaded.name, on_progress=_on_embed_progress, session_id=st.session_state.session_id)
+                    progress.progress(95, text="Storing vectors in Qdrant...")
+                    progress.progress(100, text="Document ready!")
+
+                    st.session_state.ingested_sources.add(uploaded.name)
+                    st.session_state.deleted_sources.discard(uploaded.name)
+                    st.session_state.total_pages[uploaded.name] = len(pages)
+                    st.session_state.current_source = uploaded.name
+                    os.remove(temp_path)
+                    list_sources.clear()
+                except Exception as e:
+                    progress.empty()
+                    large_doc_notice.empty()
+                    if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                        st.error(
+                            "Embedding service is busy and retries were exhausted. "
+                            "Please wait a minute and try uploading again."
+                        )
+                    else:
+                        st.error(f"Couldn't process this PDF: {e}")
+                    st.stop()
+                st.rerun()
+            else:
+                st.session_state.current_source = uploaded.name
+                st.session_state.ingested_sources.add(uploaded.name)
 
     sample_path = "assets/sample_textbook.pdf"
     qdrant_sources = list_sources(st.session_state.session_id)
-    all_sources = sorted(list(set(qdrant_sources).union(st.session_state.ingested_sources)))
+    all_sources = sorted(list(set(qdrant_sources).union(st.session_state.ingested_sources) - st.session_state.deleted_sources))
 
-    if "sample_textbook.pdf" not in all_sources and os.path.exists(sample_path):
+    if "sample_textbook.pdf" not in all_sources and os.path.exists(sample_path) and "sample_textbook.pdf" not in st.session_state.deleted_sources:
         if st.button("✨ Try a sample textbook", use_container_width=True):
             progress = st.progress(0, text="Extracting text...")
             try:
@@ -181,6 +187,7 @@ with st.sidebar:
                 progress.progress(95, text="Storing vectors in Qdrant...")
                 progress.progress(100, text="Document ready!")
                 st.session_state.ingested_sources.add("sample_textbook.pdf")
+                st.session_state.deleted_sources.discard("sample_textbook.pdf")
                 st.session_state.total_pages["sample_textbook.pdf"] = len(pages)
                 st.session_state.current_source = "sample_textbook.pdf"
                 list_sources.clear()
@@ -209,9 +216,12 @@ with st.sidebar:
             st.rerun()
 
         if st.button("🗑 Remove this textbook", use_container_width=True):
-            delete_source(st.session_state.current_source, session_id=st.session_state.session_id)
-            if st.session_state.current_source in st.session_state.ingested_sources:
-                st.session_state.ingested_sources.remove(st.session_state.current_source)
+            to_delete = st.session_state.current_source
+            if to_delete:
+                delete_source(to_delete, session_id=st.session_state.session_id)
+                st.session_state.deleted_sources.add(to_delete)
+                if to_delete in st.session_state.ingested_sources:
+                    st.session_state.ingested_sources.remove(to_delete)
             st.session_state.current_source = None
             list_sources.clear()
             st.rerun()
