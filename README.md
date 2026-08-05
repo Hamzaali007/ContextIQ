@@ -231,6 +231,7 @@ Every request — chat-typed or button-triggered — passes through a NeMo Guard
 - Multi-document cross-referencing in a single Q&A session
 
 ---
+Thanks
 
 *Built with Streamlit, Qdrant, Groq, Gemini, and NeMo Guardrails.*
 
