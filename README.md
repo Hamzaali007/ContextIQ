@@ -1,239 +1,55 @@
-# 🪶 ContextIQ
+# ContextIQ
+ContextIQ is a study assistant that reads a textbook PDF and lets you actually work with it, instead of just searching it.Upload a chapter, ask it questions, get quizzed, pull definitions,make flashcards, or generate a printable practice test along with an answer key.
+I built this project for HackClub StarDance challenge. I wanted to create an app that will be useful specially for students.So I thought this was the best choice.
 
-**Turn any textbook PDF into an interactive study partner.**
+#What does it do?
+ 
+Ask Questions works like you'd expect from a RAG app, but I tried to make the grounding visible instead of just trusting it. Every answer streams in and comes with the actual retrieved passages attached in a collapsible panel, so you can check for yourself whether the citation is real. It also remembers the last few exchanges, so follow-up questions work without you having to repeat context, and it suggests a few natural next questions after each answer.
 
-ContextIQ is a Retrieval-Augmented Generation (RAG) study assistant. Upload a textbook, and it answers grounded questions with citations, quizzes you, extracts definitions, generates flip-card flashcards, and produces printable practice tests — all pulled directly from your own material, with a safety layer that blocks off-topic requests and jailbreak attempts before they ever reach the model.
+Quiz Me only generates multiple-choice and true/false questions. I went back and forth on this originally; it also generated short-answer and essay questions, but there's no reliable way to auto-grade free text against a model answer without another LLM call in the loop, and I didn't want the quiz to just be wrong sometimes. If you want short-answer or essay-style questions, that's what the PDF test mode is for, where a human (you) grades it.
 
-Built for a hackathon submission. No user accounts required — upload and go.
+Definitions can pull every definable term out of a page range, or you can just ask for one specific term and get only that, instead of the whole chapter's glossary dumped on you.
 
----
+Flashcards work the same way  by page range or by topic,  but they're not limited to formal definitions. A card can be a fact, a number, a process, anything worth memorizing.
 
-## ✨ Features
+PDF Test generation lets you pick exactly which question types you want and how many of each say, 4 multiple choice, 3 true/false, 4 short answer  plus a difficulty level and an optional custom title. It outputs two separate PDFs: the test itself and a separate answer key with explanations.
 
-### 💬 Ask Questions
-- Grounded, streamed answers generated **only** from your uploaded textbook — no outside knowledge
-- Inline page citations on every answer
-- Expandable **source passage viewer** — see the exact retrieved text behind any answer, not just a page number
-- **Multi-turn memory** — the last few exchanges are used as context, so natural follow-ups work
-- **Follow-up question chips** — clickable, AI-suggested next questions after every answer
 
-### 📝 Quiz Me (interactive, auto-graded)
-- Multiple-choice and True/False only, since these are the only types that can be reliably auto-graded
-- Choose page range and question count
-- Retry/top-up generation loop — if the model under-delivers on a hard batch, it automatically asks for more instead of silently returning fewer questions than requested
-- Instant scoring with per-question explanations after submission
-- Attempt history tracked in the sidebar
+#Stack
+I used Streamlit for the UI as it was easier to use, though I also used HTML and CSS to beautify the UI.PyMuPDF was used for parsing.Langchain was used for recursive text splitter. Gemini was used for embeddings.Groq running Llama 3.3 70B for generation,NeMo Guardrails for input/output safety, and ReportLab for the PDF test generation.
 
-### 📖 Definitions
-- **By page range** — extracts every definable term/concept across a chapter
-- **By topic** — ask for one specific term (e.g. "define osmosis") and get just that, not the whole chapter's glossary
-- Relevance-score filtering so topic search doesn't wander into unrelated content
 
-### 🗂️ Flashcards
-- Flip-card deck covering **any** important info — facts, numbers, processes, relationships — not only formal definitions
-- Generate **by page range** or **by topic**, your choice
-- Prev / Flip / Next navigation with page-number attribution on the answer side
+#How to Run this?
 
-### 📄 Generate PDF Test
-- Fully custom composition: choose **exactly which question types** to include (Multiple Choice, True/False, Short Answer, Long Answer) and how many
-- Difficulty selector (Easy / Medium / Hard)
-- Optional custom test title
-- Produces **two separate PDFs**: a clean printable test paper and a separate answer key with explanations
-- Auto-appends ruled answer lines for short/long answer questions (more lines for essay-style responses)
-
-### 🛡️ Guardrails on every response
-- Input checked for jailbreak attempts and clearly off-topic requests **before** any retrieval or generation happens
-- Output checked for hallucination/safety flags after generation
-- Powered by NVIDIA NeMo Guardrails, running on the same Groq model as the rest of the app
-
-### ⚡ Other details
-- Real token-by-token streaming for Q&A (not a fake typing animation)
-- Cached retrieval layer — most UI interactions never hit the network, keeping the app fast
-- One-click sample textbook for instant demoing, no upload required
-- Dark, distraction-free UI with a built-in "How it works" page
-
----
-
-## 🏗️ Architecture
-
-```mermaid
-flowchart TD
-    A[📄 User Uploads PDF] --> B[PyMuPDF: Extract Text per Page]
-    B --> C[Recursive Character Text Splitter: Page-aware Chunking]
-    C --> D[Gemini Embeddings: gemini-embedding-2-preview, 768-dim]
-    D --> E[(Qdrant Vector DB)]
-
-    U[👤 Student Input] --> G{NeMo Guardrails: Input Check}
-    G -- blocked --> R1[Refusal Message]
-    G -- allowed --> M{Mode Router}
-
-    M -->|Ask Questions| QA1[Semantic Search: top-k chunks]
-    QA1 --> QA2[Groq Llama 3.3: Streamed Answer + Citations]
-    QA2 --> O{NeMo Guardrails: Output Check}
-    QA2 --> QA3[Follow-up Question Suggestions]
-
-    M -->|Quiz Me| QZ1[Page-range Retrieval]
-    QZ1 --> QZ2[Groq: Generate MCQ / True-False]
-    QZ2 --> QZ3[Retry / Top-up Loop until target count met]
-    QZ3 --> QZ4[Interactive Auto-graded Quiz UI]
-
-    M -->|Definitions| DF1[Page-range OR Topic Retrieval]
-    DF1 --> DF2[Groq: Extract Key Terms + Definitions]
-
-    M -->|Flashcards| FC1[Page-range OR Topic Retrieval]
-    FC1 --> FC2[Groq: Generate Front/Back Cards]
-    FC2 --> FC3[Flip-card Deck UI]
-
-    M -->|Generate PDF Test| PT1[Page-range Retrieval]
-    PT1 --> PT2[Groq: Custom Type Mix + Difficulty]
-    PT2 --> PT3[ReportLab: Test Paper PDF + Answer Key PDF]
-
-    O -- flagged --> R2[Flagged / Replaced Message]
-    O -- allowed --> UI[🖥️ Streamlit UI]
-
-    E -.retrieval source.-> QA1
-    E -.retrieval source.-> QZ1
-    E -.retrieval source.-> DF1
-    E -.retrieval source.-> FC1
-    E -.retrieval source.-> PT1
-```
-
-**Ingestion pipeline** (top): a PDF is parsed page-by-page, split into overlapping chunks that retain page metadata, embedded with Gemini, and stored in Qdrant.
-
-**Query pipeline** (bottom): every user action — whether a typed question or a button click — passes through a guardrails input check before touching retrieval, is routed to the appropriate mode, retrieves relevant chunks from Qdrant (semantic search for Q&A/topic lookups, or a direct page-range filter for chapter-scoped features), generates via Groq, and — for direct answers — passes through an output check before being shown.
-
----
-
-## 🧰 Tech Stack
-
-| Layer | Technology |
-|---|---|
-| UI | Streamlit |
-| PDF Parsing | PyMuPDF |
-| Chunking | LangChain `RecursiveCharacterTextSplitter` |
-| Embeddings | Google Gemini (`gemini-embedding-2-preview`) |
-| Vector Database | Qdrant Cloud |
-| LLM | Groq (Llama 3.3 70B Versatile) |
-| Guardrails | NVIDIA NeMo Guardrails |
-| PDF Generation | ReportLab |
-
----
-
-## 📁 Project Structure
+You'll need python 3.12, a free tier Qdrant Cloud cluster, and API keys for Groq and Google AI Studio (Gemini)
 
 ```
-ContextIQ/
-├── app.py                     # Streamlit entrypoint — session state, mode routing, chat loop
-├── ui.py                      # Styling + reusable rendering components
-├── ui_extras.py                # Flashcard deck + follow-up chip components
-├── config.py                   # Environment/settings loader
-│
-├── ingestion/
-│   ├── loader.py               # PDF text extraction (PyMuPDF)
-│   ├── chunker.py              # Page-aware recursive chunking
-│   └── embedder.py             # Gemini embedding calls
-│
-├── vectorstore/
-│   └── qdrantclient.py         # Upsert, semantic search, page-range search, list/delete
-│
-├── llm/
-│   ├── groq_client.py          # Groq completion + streaming wrapper (with fallback key)
-│   ├── qa.py                    # Grounded Q&A, multi-turn memory, follow-up questions
-│   ├── quiz.py                  # Quiz generation with retry/top-up logic
-│   ├── definitions.py           # Term extraction — by range or by topic
-│   └── flashcards.py            # Flashcard generation — by range or by topic
-│
-├── guardrails/
-│   ├── config.yml               # NeMo Guardrails model + rail configuration
-│   └── guard.py                 # Input/output check wrappers around every generation path
-│
-├── reports/
-│   └── pdf_generator.py         # Test paper + answer key PDF rendering (ReportLab)
-│
-├── scripts/
-│   ├── create_indexes.py        # One-off Qdrant payload index setup
-│   └── create_sample_pdf.py     # Generates the built-in sample textbook
-│
-├── assets/
-│   └── sample_textbook.pdf      # One-click demo content
-│
-└── evals/                       # Retrieval precision + LLM-judged answer quality checks
-    ├── dataset.py
-    ├── judge.py
-    └── run_eval.py
-```
-
----
-
-## 🚀 Getting Started
-
-### Prerequisites
-- Python 3.12
-- A [Qdrant Cloud](https://cloud.qdrant.io) cluster (free tier is sufficient)
-- API keys for [Groq](https://console.groq.com), [Google AI Studio](https://aistudio.google.com) (Gemini)
-
-### Installation
-
-```bash
-git clone <your-repo-url>
+git clone https://github.com/Hamzaali007/ContextIQ
 cd contextiq
-uv sync   # or: pip install -r requirements.txt
+uv sync
 ```
 
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-GEMINI_API_KEY=your_gemini_api_key
-QDRANT_CLUSTER_ENDPOINT=https://your-cluster.aws.cloud.qdrant.io
-QDRANT_API_KEY=your_qdrant_api_key
-GROQ_API_KEY=your_groq_api_key
-GROQ_FALLBACK_API_KEY=your_backup_groq_api_key   # optional but recommended
+Drop a .env file in the project root:
 ```
-
-### One-time setup
-
-```bash
-python scripts/create_indexes.py       # Creates Qdrant payload indexes (source, page)
-python scripts/create_sample_pdf.py    # Generates the sample textbook for demo mode
+GEMINI_API_KEY = YOUR_KEY
+QDRANT_CLUSTER_ENDPOINT = ENDPOINT
+QDRANT_API_KEY = YOUR KEY
+GROQ_API_KEY = YOUR KEY
+GROQ_FALLBACK_API_KEY = YOUR KEY
 ```
-
-### Run
-
-```bash
+Then you have to run the setup scripts once and start the app:
+```
+python scripts/create_indexes.py
+python scripts/create_sample_pdf.py
 streamlit run app.py
+or
+python -m streamlit run app.py
 ```
+##Using it:
 
----
-
-## 📖 Usage Guide
-
-1. **Upload a textbook PDF** from the sidebar, or click **✨ Try a sample textbook** to demo instantly with zero setup.
-2. Pick a mode from the top row of buttons: **Ask Questions**, **Quiz Me**, **Definitions**, **Flashcards**, or **Generate PDF Test**.
-3. For chapter-scoped modes (Quiz, Definitions, Flashcards, PDF Test), use the page-range slider — or for Definitions/Flashcards, switch to topic mode and just type what you want to focus on.
-4. Type naturally in the chat box at any time — ContextIQ recognizes phrases like *"quiz me,"* *"define X,"* *"flashcards on X,"* or *"generate a pdf test"* and will guide you to the right controls if a request needs a page range or count first.
-5. Downloadable PDF tests appear in the **Practice tests** section of the sidebar as soon as they're generated.
-
----
-
-## 🔒 Safety Notes
-
-Every request — chat-typed or button-triggered — passes through a NeMo Guardrails input check before any retrieval or generation begins, blocking jailbreak attempts and clearly off-topic requests. Generated answers pass through a second output check afterward. Retrieval is always scoped to the uploaded document itself, so answers are grounded in what you gave the system, not the model's general training knowledge.
-
----
-
-## 🗺️ Possible Future Improvements
-
-- Auto-detected chapter/heading structure (currently page-range based)
-- Persistent per-user accounts and cross-device history
-- Hosted observability/tracing dashboard
-- Multi-document cross-referencing in a single Q&A session
-
----
-Thanks
-
-*Built with Streamlit, Qdrant, Groq, Gemini, and NeMo Guardrails.*
+Upload a PDF from the sidebar, or click the sample textbook button if you just want to try it without hunting for a file. Pick a mode from the row of buttons at the top. For anything chapter-scoped (quiz, definitions, flashcards, PDF test), there's a page-range slider, or for definitions and flashcards you can switch to topic mode instead. You can also just type naturally in the chat — "quiz me," "define X," "flashcards on X,"  and it'll point you to the right controls if something needs a page range first.
 
 
+#A few honest limitations
 
+Retrieval is page-range based rather than chapter-aware, since there's no reliable, format-agnostic way to detect chapter headings across arbitrary PDFs. Very large page ranges get capped before hitting the model, since Groq's free-tier token limits are easy to blow past on a long chapter; you'll get a note if that happens. There's no persistent accounts system, so everything is scoped to your browser session; close the tab and start fresh elsewhere, and your uploaded books won't follow you
