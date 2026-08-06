@@ -40,7 +40,7 @@ GROQ_FALLBACK_API_KEY = YOUR KEY
 Then you have to run the setup scripts once and start the app:
 ```
 python scripts/create_indexes.py
-python scripts/create_sample_pdf.py
+python samplepdf.py
 streamlit run app.py
 or
 python -m streamlit run app.py
